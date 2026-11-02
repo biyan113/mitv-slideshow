@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>电视相册</title>
+<style>
+  :root {
+    --bg: #0b0d12; --card: #161a22; --line: #262c38; --text: #eef1f6; --muted: #8b93a3;
+    --accent: #4fc3f7; --accent2: #7c4dff; --danger: #ff5c6c;
+    --safe-t: env(safe-area-inset-top, 0px); --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", "Microsoft YaHei", sans-serif; }
+  body { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+  button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; }
+
+  header { position: sticky; top: 0; z-index: 5; padding: calc(14px + var(--safe-t)) 18px 12px;
+    background: rgba(11,13,18,.85); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 20px; letter-spacing: .5px; }
+  header .count { color: var(--muted); font-size: 13px; }
+
+  main { flex: 1; padding: 14px 14px calc(110px + var(--safe-b)); display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 16px; }
+  .card h2 { margin: 0 0 12px; font-size: 14px; color: var(--muted); font-weight: 600; letter-spacing: .5px; }
+
+  .remote { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 10px; }
+  .remote button { height: 56px; border-radius: 14px; background: #1f2430; font-size: 22px; transition: transform .1s, background .2s; }
+  .remote button:active { transform: scale(.94); background: #2a3141; }
+  .remote .play { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; }
+  .row + .row { border-top: 1px solid var(--line); }
+  .row > label:first-child { flex: 1; }
+  .row output { color: var(--accent); min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .switch { position: relative; width: 50px; height: 30px; flex: none; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch span { position: absolute; inset: 0; border-radius: 30px; background: #333a48; transition: .25s; }
+  .switch span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: .25s; }
+  .switch input:checked + span { background: var(--accent); }
+  .switch input:checked + span::after { transform: translateX(20px); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; padding: 4px 0 6px; }
+  .chip { padding: 8px 14px; border-radius: 999px; background: #1f2430; border: 1px solid var(--line); font-size: 14px; transition: .2s; }
+  .chip.on { background: rgba(79,195,247,.15); border-color: var(--accent); color: var(--accent); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  @media (min-width: 600px) { .grid { grid-template-columns: repeat(5, 1fr); } }
+  .tile { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: #1f2430; animation: pop .35s ease; }
+  .tile img, .tile video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile video { pointer-events: none; }
+  .tile .badge { position: absolute; left: 6px; bottom: 6px; padding: 2px 8px; border-radius: 999px;
+    background: rgba(0,0,0,.65); color: #fff; font-size: 12px; font-variant-numeric: tabular-nums; pointer-events: none; }
+  .tile .no { position: absolute; left: 6px; top: 6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px;
+    background: rgba(0,0,0,.6); color: #fff; font-size: 12px; line-height: 22px; text-align: center; pointer-events: none; }
+  .tile .eye { position: absolute; right: 40px; top: 6px; width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(0,0,0,.6); color: #fff; font-size: 14px; line-height: 28px; text-align: center; }
+  .tile.hidden-item > img, .tile.hidden-item > video { opacity: .3; filter: grayscale(1); }
+  .tile .hid { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; pointer-events: none; }
+  .tile.hidden-item .hid { display: flex; }
+  .grid.sorting .tile { touch-action: none; cursor: grab; animation: wiggle .3s ease-in-out infinite alternate; }
+  .grid.sorting .tile .del, .grid.sorting .tile .eye { display: none; }
+  .grid.sorting .tile.placeholder { opacity: .15; animation: none; }
+  .tile.ghost { position: fixed; z-index: 50; pointer-events: none; animation: none; transform: scale(1.08);
+    box-shadow: 0 12px 30px rgba(0,0,0,.6); outline: 2px solid var(--accent); }
+  @keyframes wiggle { from { transform: rotate(-1.2deg); } to { transform: rotate(1.2deg); } }
+  .sortbar { display: none; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .sortbar.show { display: flex; }
+  .sortbar .hint { flex: 1 0 100%; color: var(--muted); font-size: 13px; }
+  .sortbar button { padding: 8px 14px; border-radius: 999px; background: #1f2430; border: 1px solid var(--line); font-size: 14px; }
+  .tools { display: flex; gap: 16px; align-items: center; }
+  .tools .link.sort { color: var(--accent); }
+  .tile .del { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(0,0,0,.6); color: #fff; font-size: 16px; line-height: 28px; text-align: center; }
+  @keyframes pop { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+  .empty { text-align: center; color: var(--muted); padding: 36px 0; }
+  .link { color: var(--danger); font-size: 14px; }
+
+  .bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; display: flex; gap: 10px;
+    padding: 12px 14px calc(12px + var(--safe-b)); background: rgba(11,13,18,.9);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-top: 1px solid var(--line); }
+  .bar button { height: 54px; border-radius: 16px; font-size: 17px; font-weight: 600; }
+  .bar .upload { flex: 2; background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+  .bar .preview { flex: 1; background: #1f2430; }
+
+  .progress { position: fixed; left: 14px; right: 14px; bottom: calc(86px + var(--safe-b)); z-index: 7;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; display: none; }
+  .progress.show { display: block; animation: pop .25s; }
+  .progress .track { height: 6px; background: #262c38; border-radius: 6px; overflow: hidden; margin-top: 8px; }
+  .progress .fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width .2s; }
+  .toast { position: fixed; left: 50%; top: calc(70px + var(--safe-t)); transform: translateX(-50%); z-index: 30;
+    background: rgba(30,35,46,.95); padding: 10px 18px; border-radius: 999px; font-size: 14px; opacity: 0; transition: opacity .25s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+
+  /* ---------- 全屏预览 ---------- */
+  .viewer { position: fixed; inset: 0; z-index: 20; background: #000; display: none; overflow: hidden; touch-action: none; }
+  .viewer.show { display: block; }
+  .viewer .layer { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: 0; will-change: transform, opacity; backface-visibility: hidden; }
+  .viewer.fill .layer { object-fit: cover; }
+  .viewer .stage { position: absolute; inset: 0; perspective: 1400px; }
+  .viewer video.layer { z-index: 3; }
+  .viewer .hud { position: absolute; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; transition: opacity .3s; z-index: 2; }
+  .viewer .hud.top { top: 0; padding-top: calc(12px + var(--safe-t)); padding-bottom: 30px; background: linear-gradient(rgba(0,0,0,.6), transparent); }
+  .viewer .hud.bottom { bottom: 0; padding-bottom: calc(18px + var(--safe-b)); padding-top: 30px; justify-content: center; gap: 18px; background: linear-gradient(transparent, rgba(0,0,0,.6)); }
+  .viewer .hud button { width: 52px; height: 52px; border-radius: 50%; background: rgba(255,255,255,.14); font-size: 20px; color: #fff; }
+  .viewer.idle .hud { opacity: 0; pointer-events: none; }
+  .viewer .idx { font-variant-numeric: tabular-nums; color: #fff; text-shadow: 0 1px 3px #000; }
+  .dots { position: absolute; left: 0; right: 0; top: calc(4px + var(--safe-t)); height: 3px; display: flex; gap: 3px; padding: 0 10px; z-index: 3; }
+  .dots i { flex: 1; background: rgba(255,255,255,.25); border-radius: 3px; overflow: hidden; }
+  .dots i b { display: block; height: 100%; width: 0; background: #fff; }
+</style>
+</head>
+<body>
+<header>
+  <h1>电视相册</h1>
+  <span class="count" id="count">连接中…</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>遥控电视</h2>
+    <div class="remote">
+      <button data-act="prev" aria-label="上一张">⏮</button>
+      <button class="play" data-act="toggle" aria-label="暂停/继续">⏯</button>
+      <button data-act="next" aria-label="下一张">⏭</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>轮播设置</h2>
+    <div class="row" style="flex-direction:column;align-items:stretch">
+      <div style="display:flex;justify-content:space-between"><label for="interval">图片停留</label><output id="intervalOut">8 秒</output></div>
+      <input type="range" id="interval" min="3" max="60" step="1" value="8">
+    </div>
+    <div class="row" style="flex-direction:column;align-items:stretch">
+      <label>切换动效</label>
+      <div class="chips" id="effects">
+        <button class="chip" data-effect="kenburns">缓慢推镜</button>
+        <button class="chip" data-effect="fade">淡入淡出</button>
+        <button class="chip" data-effect="slide">滑动</button>
+        <button class="chip" data-effect="zoom">缩放</button>
+        <button class="chip" data-effect="flip">3D 翻转</button>
+        <button class="chip" data-effect="random">随机</button>
+      </div>
+    </div>
+    <div class="row"><label for="shuffle">随机顺序</label><label class="switch"><input type="checkbox" id="shuffle"><span></span></label></div>
+    <div class="row"><label for="fill">铺满屏幕（会裁切边缘）</label><label class="switch"><input type="checkbox" id="fill"><span></span></label></div>
+    <div class="row"><label for="sound">电视播放视频声音</label><label class="switch"><input type="checkbox" id="sound"><span></span></label></div>
+    <div class="row"><label for="qr">电视角落常驻扫码二维码</label><label class="switch"><input type="checkbox" id="qr"><span></span></label></div>
+  </section>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h2 style="margin:0">播放列表</h2>
+      <div class="tools">
+        <button class="link sort" id="sortBtn">排序</button>
+        <button class="link" id="clear">清空全部</button>
+      </div>
+    </div>
+    <div class="sortbar" id="sortbar">
+      <span class="hint">按住缩略图拖动调整播放顺序，松手自动保存</span>
+      <button id="sortOld">最早在前</button>
+      <button id="sortNew">最新在前</button>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="empty" id="empty">还没有图片或视频，点击下方按钮上传</div>
+  </section>
+</main>
+
+<div class="progress" id="progress">
+  <div id="progressText">上传中…</div>
+  <div class="track"><div class="fill" id="progressFill"></div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<div class="bar">
+  <button class="preview" id="previewBtn">全屏预览</button>
+  <button class="upload" id="uploadBtn">＋ 上传图片 / 视频</button>
+</div>
+<input type="file" id="file" accept="image/*,video/*" multiple hidden>
+
+<div class="viewer" id="viewer">
+  <div class="stage"><img class="layer" alt=""><img class="layer" alt=""><video class="layer" id="vVideo" playsinline webkit-playsinline preload="auto"></video></div>
+  <div class="dots" id="dots"></div>
+  <div class="hud top"><span class="idx" id="vIdx"></span><button id="vClose" aria-label="关闭">✕</button></div>
+  <div class="hud bottom">
+    <button id="vPrev" aria-label="上一张">⏮</button>
+    <button id="vPlay" aria-label="暂停/继续">⏸</button>
+    <button id="vNext" aria-label="下一张">⏭</button>
+    <button id="vMute" aria-label="声音">🔇</button>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let state = { images: [], settings: { interval: 8, shuffle: false, fill: false, effect: 'kenburns', sound: true } };
+const VIDEO_RE = /\.(mp4|m4v|mov|webm|mkv|3gp)$/i;
+const isVideoName = (name) => VIDEO_RE.test(name);
+const fmtDur = (ms) => { const t = Math.round((ms || 0) / 1000); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+async function api(path, body) {
+  const res = await fetch(path, { method: body === undefined ? 'GET' : 'POST',
+    headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ---------------- 列表与设置 ----------------
+const sig = (s) => s.images.map(i => i.name + (i.hidden ? '!' : '')).join();
+let sorting = false, drag = null;
+
+function render(s) {
+  const prevSig = sig(state);
+  state = s;
+  const nVideo = s.images.filter(i => i.type === 'video').length, nImage = s.images.length - nVideo;
+  const nHidden = s.images.filter(i => i.hidden).length;
+  $('count').textContent = s.images.length
+    ? [nImage && `${nImage} 张图片`, nVideo && `${nVideo} 个视频`, nHidden && `${nHidden} 个已隐藏`].filter(Boolean).join(' · ') : '暂无内容';
+  $('sortBtn').style.display = s.images.length > 1 ? '' : 'none';
+  $('empty').style.display = s.images.length ? 'none' : 'block';
+  $('clear').style.display = s.images.length ? '' : 'none';
+  if (prevSig !== sig(s) || !$('grid').children.length) {
+    const grid = $('grid'); grid.innerHTML = '';
+    // 按电视的播放顺序排列；序号只算没隐藏的
+    let no = 0;
+    s.images.forEach((img) => {
+      const el = document.createElement('div');
+      el.className = 'tile' + (img.hidden ? ' hidden-item' : '');
+      el.dataset.name = img.name;
+      const media = img.type === 'video'
+        ? `<video muted playsinline preload="metadata" src="/img/${img.name}#t=0.1"></video><span class="badge">▶ ${fmtDur(img.duration)}</span>`
+        : `<img loading="lazy" src="/img/${img.name}" alt="">`;
+      el.innerHTML = media
+        + `<span class="no">${img.hidden ? '–' : ++no}</span><span class="hid">已隐藏</span>`
+        + `<button class="eye" aria-label="${img.hidden ? '显示' : '隐藏'}">${img.hidden ? '🙈' : '👁'}</button>`
+        + `<button class="del" aria-label="删除">✕</button>`;
+      el.onclick = () => {
+        if (sorting) return;
+        if (img.hidden) { toast('已隐藏，电视不会播放。点 🙈 恢复'); return; }
+        openViewer(img.name);
+      };
+      el.querySelector('.eye').onclick = async (e) => {
+        e.stopPropagation();
+        try {
+          render(await api(`/api/hide?name=${encodeURIComponent(img.name)}&hidden=${img.hidden ? 0 : 1}`, {}));
+          toast(img.hidden ? '已恢复播放' : '已隐藏，电视会跳过它');
+        } catch (err) { toast('操作失败'); }
+      };
+      el.querySelector('.del').onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm(img.type === 'video' ? '删除这个视频？' : '删除这张图片？')) return;
+        render(await api('/api/delete?name=' + encodeURIComponent(img.name), {}));
+        toast('已删除');
+      };
+      grid.appendChild(el);
+    });
+  }
+  if (!render.settingsDirty) {
+    const st = s.settings;
+    $('interval').value = st.interval; $('intervalOut').textContent = st.interval + ' 秒';
+    $('shuffle').checked = st.shuffle; $('fill').checked = st.fill; $('qr').checked = !!st.qr;
+    $('sound').checked = st.sound !== false;
+    document.querySelectorAll('.chip').forEach(c => c.classList.toggle('on', c.dataset.effect === st.effect));
+  }
+}
+
+async function refresh() {
+  if (drag) return; // 拖动中不刷新列表
+  try { render(await api('/api/state')); }
+  catch (e) { $('count').textContent = '连接断开'; }
+}
+
+let saveTimer;
+function saveSettings(patch) {
+  Object.assign(state.settings, patch);
+  render.settingsDirty = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try { render(await api('/api/settings', patch)); toast('电视已更新'); }
+    catch (e) { toast('保存失败'); }
+    render.settingsDirty = false;
+  }, 300);
+}
+$('interval').oninput = (e) => { $('intervalOut').textContent = e.target.value + ' 秒'; };
+$('interval').onchange = (e) => saveSettings({ interval: +e.target.value });
+$('shuffle').onchange = (e) => saveSettings({ shuffle: e.target.checked });
+$('fill').onchange = (e) => saveSettings({ fill: e.target.checked });
+$('qr').onchange = (e) => saveSettings({ qr: e.target.checked });
+$('sound').onchange = (e) => saveSettings({ sound: e.target.checked });
+document.querySelectorAll('.chip').forEach(c => c.onclick = () => {
+  document.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x === c));
+  saveSettings({ effect: c.dataset.effect });
+});
+document.querySelectorAll('.remote button').forEach(b => b.onclick = async () => {
+  try { await api('/api/control?action=' + b.dataset.act, {}); if (navigator.vibrate) navigator.vibrate(15); }
+  catch (e) { toast('电视未响应'); }
+});
+// ---------------- 排序（拖动） ----------------
+function setSorting(on) {
+  sorting = on;
+  $('grid').classList.toggle('sorting', on);
+  $('sortbar').classList.toggle('show', on);
+  $('sortBtn').textContent = on ? '完成' : '排序';
+}
+$('sortBtn').onclick = () => setSorting(!sorting);
+
+async function saveOrder(names) {
+  try { render(await api('/api/order', { names })); toast('顺序已保存，电视已更新'); }
+  catch (e) { toast('保存顺序失败'); refresh(); }
+}
+// 文件名以上传时间开头，直接按名字排序即可
+$('sortOld').onclick = () => saveOrder(state.images.map(i => i.name).sort());
+$('sortNew').onclick = () => saveOrder(state.images.map(i => i.name).sort().reverse());
+
+$('grid').addEventListener('pointerdown', (e) => {
+  if (!sorting || drag) return;
+  const tile = e.target.closest('.tile');
+  if (!tile) return;
+  e.preventDefault();
+  const r = tile.getBoundingClientRect();
+  const ghost = tile.cloneNode(true);
+  ghost.classList.add('ghost');
+  Object.assign(ghost.style, { width: r.width + 'px', height: r.height + 'px', left: r.left + 'px', top: r.top + 'px' });
+  document.body.appendChild(ghost);
+  tile.classList.add('placeholder');
+  tile.setPointerCapture(e.pointerId);
+  drag = { tile, ghost, id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top,
+    before: [...$('grid').children].map(t => t.dataset.name).join() };
+  if (navigator.vibrate) navigator.vibrate(10);
+});
+
+$('grid').addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  drag.ghost.style.left = (e.clientX - drag.dx) + 'px';
+  drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
+  // 拖到屏幕上下边缘时自动滚动
+  if (e.clientY < 90) window.scrollBy(0, -12);
+  else if (e.clientY > window.innerHeight - 140) window.scrollBy(0, 12);
+  const over = document.elementFromPoint(e.clientX, e.clientY);
+  const target = over && over.closest('#grid .tile');
+  if (!target || target === drag.tile) return;
+  const tiles = [...$('grid').children];
+  const from = tiles.indexOf(drag.tile), to = tiles.indexOf(target);
+  $('grid').insertBefore(drag.tile, from < to ? target.nextSibling : target);
+});
+
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  d.ghost.remove();
+  d.tile.classList.remove('placeholder');
+  const names = [...$('grid').children].map(t => t.dataset.name);
+  if (names.join() !== d.before) saveOrder(names);
+}
+$('grid').addEventListener('pointerup', endDrag);
+$('grid').addEventListener('pointercancel', endDrag);
+
+$('clear').onclick = async () => {
+  if (!confirm('确定清空全部图片和视频？')) return;
+  render(await api('/api/clear', {})); toast('已清空');
+};
+
+// ---------------- 上传 ----------------
+const MAX_EDGE = 3840;
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif',
+  'image/bmp': 'bmp', 'image/heic': 'heic', 'image/heif': 'heif',
+  'video/mp4': 'mp4', 'video/x-m4v': 'm4v', 'video/quicktime': 'mov', 'video/webm': 'webm',
+  'video/x-matroska': 'mkv', 'video/3gpp': '3gp' };
+
+function extOf(file) {
+  if (EXT[file.type]) return EXT[file.type];
+  const m = /\.([a-z0-9]+)$/i.exec(file.name || '');
+  return m ? m[1].toLowerCase() : 'jpg';
+}
+
+// 超过 4K 的照片在手机上先缩小再上传：省流量、省电视内存，并自动矫正方向
+async function prepare(file) {
+  const ext = extOf(file);
+  // 视频和 GIF 原样上传
+  if (ext === 'gif' || VIDEO_RE.test('.' + ext) || typeof createImageBitmap !== 'function') return { blob: file, ext };
+  try {
+    const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    const scale = Math.min(1, MAX_EDGE / Math.max(bmp.width, bmp.height));
+    if (scale === 1 && ['jpg', 'jpeg', 'png', 'webp'].includes(ext) && file.size < 12e6) { bmp.close && bmp.close(); return { blob: file, ext }; }
+    const c = document.createElement('canvas');
+    c.width = Math.round(bmp.width * scale); c.height = Math.round(bmp.height * scale);
+    c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+    bmp.close && bmp.close();
+    const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9));
+    return blob ? { blob, ext: 'jpg' } : { blob: file, ext };
+  } catch (e) {
+    return { blob: file, ext }; // 浏览器解不了（如安卓 Chrome 的 HEIC），交给电视解码
+  }
+}
+
+function send(blob, ext, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/api/upload?ext=' + encodeURIComponent(ext));
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+    xhr.onload = () => xhr.status === 200 ? resolve() : reject(new Error(xhr.responseText || ('HTTP ' + xhr.status)));
+    xhr.onerror = () => reject(new Error('网络错误'));
+    xhr.send(blob);
+  });
+}
+
+async function uploadFiles(files) {
+  if (!files.length) return;
+  const box = $('progress'); box.classList.add('show');
+  let ok = 0, fail = 0, lastError = '';
+  for (let i = 0; i < files.length; i++) {
+    const sizeMB = files[i].size / 1048576;
+    const label = `上传中 ${i + 1} / ${files.length}` + (sizeMB > 20 ? `（${sizeMB.toFixed(0)}MB）` : '');
+    $('progressText').textContent = label + '（处理中）';
+    const { blob, ext } = await prepare(files[i]);
+    try {
+      await send(blob, ext, (p) => {
+        $('progressText').textContent = `${label}  ${Math.round(p * 100)}%`;
+        $('progressFill').style.width = ((i + p) / files.length * 100) + '%';
+      });
+      ok++;
+    } catch (e) { fail++; lastError = e.message; console.warn(e); }
+    $('progressFill').style.width = ((i + 1) / files.length * 100) + '%';
+  }
+  box.classList.remove('show'); $('progressFill').style.width = '0';
+  toast(fail ? `成功 ${ok} 个，失败 ${fail} 个${lastError ? '：' + lastError : ''}` : `已上传 ${ok} 个，电视正在展示`);
+  refresh();
+}
+$('uploadBtn').onclick = () => $('file').click();
+$('file').onchange = (e) => { uploadFiles(Array.from(e.target.files)); e.target.value = ''; };
+// 电脑上支持直接拖拽
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => { e.preventDefault(); uploadFiles(Array.from(e.dataTransfer.files).filter(f => /^(image|video)\//.test(f.type) || /\.(heic|heif)$/i.test(f.name) || VIDEO_RE.test(f.name))); });
+
+// ---------------- 全屏预览（与电视同样的动效） ----------------
+const V = { el: $('viewer'), layers: Array.from(document.querySelectorAll('.viewer img.layer')), front: 0,
+  index: 0, order: [], paused: false, timer: 0, idleTimer: 0, kb: null, video: $('vVideo'), videoOn: false, muted: true };
+const EFFECTS = ['fade', 'slide', 'zoom', 'kenburns', 'flip'];
+const EASE = 'cubic-bezier(.22,.8,.3,1)';
+const DUR = 1200;
+
+function openViewer(startName) {
+  V.order = state.images.filter(i => !i.hidden).map(i => i.name);
+  if (!V.order.length) { toast(state.images.length ? '内容都被隐藏了' : '先上传几张图片吧'); return; }
+  let start = startName ? V.order.indexOf(startName) : 0;
+  if (state.settings.shuffle) {
+    const first = V.order[start] ?? V.order[0];
+    V.order.sort(() => Math.random() - .5);
+    if (start >= 0) { V.order.splice(V.order.indexOf(first), 1); V.order.unshift(first); }
+    start = 0;
+  }
+  V.index = Math.max(0, start || 0);
+  V.paused = false; $('vPlay').textContent = '⏸';
+  stopVideo(true); updateMute();
+  V.el.classList.toggle('fill', state.settings.fill);
+  V.layers.forEach(l => { l.getAnimations().forEach(a => a.cancel()); l.style.opacity = 0; l.removeAttribute('src'); });
+  buildDots();
+  V.el.classList.add('show');
+  const root = document.documentElement;
+  (root.requestFullscreen || root.webkitRequestFullscreen || (() => {})).call(root)?.catch?.(() => {});
+  try { screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}); } catch (e) {}
+  wake();
+  go(V.index, 1, true);
+}
+
+function closeViewer() {
+  clearTimeout(V.timer); V.el.classList.remove('show');
+  V.token = (V.token || 0) + 1; stopVideo(true);
+  if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+}
+
+function buildDots() {
+  const d = $('dots'); d.innerHTML = '';
+  if (V.order.length > 40) return; // 太多就不显示进度条
+  V.order.forEach(() => { const i = document.createElement('i'); i.appendChild(document.createElement('b')); d.appendChild(i); });
+}
+
+function updateDots() {
+  const items = $('dots').children;
+  for (let i = 0; i < items.length; i++) {
+    const b = items[i].firstChild;
+    b.getAnimations().forEach(a => a.cancel());
+    b.style.width = i < V.index ? '100%' : '0';
+  }
+  const cur = items[V.index] && items[V.index].firstChild;
+  // 视频的进度条由播放进度驱动（见 timeupdate）
+  if (cur && !V.paused && V.order.length > 1 && !isVideoName(V.order[V.index])) {
+    cur.animate([{ width: '0' }, { width: '100%' }], { duration: state.settings.interval * 1000 + DUR, fill: 'forwards' });
+  }
+}
+
+function load(src) {
+  return new Promise((res) => { const im = new Image(); im.onload = im.onerror = () => res(); im.src = src; });
+}
+
+async function go(i, dir, first) {
+  const n = V.order.length; if (!n) return;
+  V.index = ((i % n) + n) % n;
+  clearTimeout(V.timer);
+  const token = (V.token = (V.token || 0) + 1);
+  const src = '/img/' + V.order[V.index];
+  $('vIdx').textContent = `${V.index + 1} / ${n}`;
+  if (isVideoName(V.order[V.index])) { playVideo(src, token); updateDots(); return; }
+  await load(src);
+  if (token !== V.token) return;
+  stopVideo(false);
+  const inEl = V.layers[1 - V.front], outEl = V.layers[V.front];
+  V.front = 1 - V.front;
+  inEl.getAnimations().forEach(a => a.cancel());
+  inEl.src = src; inEl.style.zIndex = 1; outEl.style.zIndex = 0;
+
+  let effect = state.settings.effect;
+  if (effect === 'random') effect = EFFECTS[Math.floor(Math.random() * EFFECTS.length)];
+  if (first && effect !== 'kenburns') effect = 'fade';
+  const keep = (a) => { a.onfinish = () => { outEl.style.opacity = 0; }; };
+  const opts = { duration: DUR, easing: EASE, fill: 'forwards' };
+  const w = window.innerWidth;
+
+  if (effect === 'slide') {
+    inEl.animate([{ transform: `translateX(${w * dir}px)`, opacity: 1 }, { transform: 'none', opacity: 1 }], opts);
+    keep(outEl.animate([{ transform: 'translateX(0)', opacity: 1 }, { transform: `translateX(${-w * dir * .35}px)`, opacity: 0 }], opts));
+  } else if (effect === 'zoom') {
+    inEl.animate([{ transform: 'scale(1.25)', opacity: 0 }, { transform: 'scale(1)', opacity: 1 }], opts);
+    keep(outEl.animate([{ opacity: 1 }, { transform: 'scale(.9)', opacity: 0 }], opts));
+  } else if (effect === 'flip') {
+    const half = { duration: DUR / 2, fill: 'forwards' };
+    inEl.style.opacity = 0;
+    const a = outEl.animate([{ transform: 'rotateY(0)', opacity: 1 }, { transform: `rotateY(${90 * dir}deg)`, opacity: 1 }], { ...half, easing: 'ease-in' });
+    a.onfinish = () => {
+      outEl.style.opacity = 0;
+      if (token !== V.token) return;
+      inEl.animate([{ transform: `rotateY(${-90 * dir}deg)`, opacity: 1 }, { transform: 'rotateY(0)', opacity: 1 }], { ...half, easing: EASE });
+    };
+  } else {
+    // fade 与 kenburns 都先交叉淡入
+    inEl.animate([{ opacity: 0 }, { opacity: 1 }], opts);
+    if (!first) keep(outEl.animate([{ opacity: 1 }, { opacity: 0 }], opts));
+    if (effect === 'kenburns') {
+      const zoomIn = Math.random() < .5;
+      const dx = (Math.random() - .5) * 6, dy = (Math.random() - .5) * 6;
+      const from = `scale(${zoomIn ? 1 : 1.15}) translate(0,0)`;
+      const to = `scale(${zoomIn ? 1.15 : 1}) translate(${dx}%,${dy}%)`;
+      inEl.animate([{ transform: from }, { transform: to }],
+        { duration: state.settings.interval * 1000 + DUR, easing: 'linear', fill: 'forwards' });
+    }
+  }
+  updateDots();
+  schedule();
+}
+
+// 视频在最上层淡入，播完自动下一项
+function playVideo(src, token) {
+  const v = V.video;
+  clearTimeout(V.timer);
+  const wasOn = V.videoOn;
+  v.getAnimations().forEach(a => a.cancel());
+  v.style.opacity = wasOn ? 1 : 0;
+  V.videoOn = true;
+  v.muted = V.muted; v.loop = V.order.length === 1;
+  v.onloadeddata = () => {
+    if (token !== V.token || wasOn) return;
+    v.animate([{ opacity: 0 }, { opacity: 1 }], { duration: DUR, easing: EASE, fill: 'forwards' });
+  };
+  v.ontimeupdate = () => {
+    const dot = $('dots').children[V.index];
+    if (dot && v.duration) dot.firstChild.style.width = (v.currentTime / v.duration * 100) + '%';
+  };
+  v.onended = () => { if (token === V.token && !V.paused) go(V.index + 1, 1); };
+  v.onerror = () => {
+    if (token !== V.token) return;
+    toast('这个视频浏览器无法播放，已跳过');
+    if (V.order.length > 1) V.timer = setTimeout(() => go(V.index + 1, 1), 1500);
+  };
+  v.src = src;
+  if (!V.paused) {
+    const p = v.play();
+    // 部分浏览器不允许带声音自动播放：退回静音
+    if (p && p.catch) p.catch(() => { V.muted = v.muted = true; updateMute(); v.play().catch(() => {}); });
+  }
+}
+
+function stopVideo(immediate) {
+  if (!V.videoOn) return;
+  V.videoOn = false;
+  const v = V.video;
+  const done = () => { if (V.videoOn) return; v.pause(); v.removeAttribute('src'); v.load(); };
+  if (immediate) { v.getAnimations().forEach(a => a.cancel()); v.style.opacity = 0; done(); return; }
+  v.animate([{ opacity: 1 }, { opacity: 0 }], { duration: DUR, fill: 'forwards' }).onfinish = done;
+}
+
+function updateMute() { $('vMute').textContent = V.muted ? '🔇' : '🔊'; }
+
+function schedule() {
+  clearTimeout(V.timer);
+  if (V.paused || V.order.length < 2) return;
+  V.timer = setTimeout(() => go(V.index + 1, 1), state.settings.interval * 1000 + DUR);
+}
+
+function togglePlay() {
+  V.paused = !V.paused; $('vPlay').textContent = V.paused ? '▶' : '⏸';
+  if (V.videoOn) { V.paused ? V.video.pause() : V.video.play().catch(() => {}); return; }
+  if (V.paused) { clearTimeout(V.timer); updateDots(); } else go(V.index + 1, 1);
+}
+
+function wake() {
+  V.el.classList.remove('idle'); clearTimeout(V.idleTimer);
+  V.idleTimer = setTimeout(() => V.el.classList.add('idle'), 3000);
+}
+
+$('previewBtn').onclick = () => openViewer(null);
+$('vClose').onclick = (e) => { e.stopPropagation(); closeViewer(); };
+$('vPrev').onclick = (e) => { e.stopPropagation(); wake(); go(V.index - 1, -1); };
+$('vNext').onclick = (e) => { e.stopPropagation(); wake(); go(V.index + 1, 1); };
+$('vPlay').onclick = (e) => { e.stopPropagation(); wake(); togglePlay(); };
+$('vMute').onclick = (e) => {
+  e.stopPropagation(); wake();
+  V.muted = V.video.muted = !V.muted; updateMute();
+  if (V.videoOn && !V.paused) V.video.play().catch(() => {});
+};
+
+// 左右滑动切换，轻点显示/隐藏控制条
+let touchX = null, touchY = null;
+V.el.addEventListener('touchstart', (e) => { touchX = e.touches[0].clientX; touchY = e.touches[0].clientY; }, { passive: true });
+V.el.addEventListener('touchend', (e) => {
+  if (touchX === null) return;
+  const dx = e.changedTouches[0].clientX - touchX, dy = e.changedTouches[0].clientY - touchY;
+  touchX = null;
+  if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) { dx < 0 ? go(V.index + 1, 1) : go(V.index - 1, -1); }
+  else if (dy > 120 && Math.abs(dy) > Math.abs(dx)) closeViewer(); // 下滑关闭
+  else if (!e.target.closest('button')) {
+    V.el.classList.contains('idle') ? wake() : V.el.classList.add('idle');
+  }
+});
+V.el.addEventListener('click', (e) => { if (!('ontouchstart' in window) && !e.target.closest('button')) wake(); });
+V.el.addEventListener('mousemove', wake);
+document.addEventListener('keydown', (e) => {
+  if (!V.el.classList.contains('show')) return;
+  if (e.key === 'ArrowRight') go(V.index + 1, 1);
+  else if (e.key === 'ArrowLeft') go(V.index - 1, -1);
+  else if (e.key === ' ') togglePlay();
+  else if (e.key === 'Escape') closeViewer();
+});
+
+refresh();
+setInterval(() => { if (!document.hidden && !V.el.classList.contains('show')) refresh(); }, 5000);
+</script>
+</body>
+</html>
