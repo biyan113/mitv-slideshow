@@ -35,3 +35,7 @@ adb install TvGallery-*.apk
 - 纯 Java 实现，无 AndroidX 依赖，仅依赖 `com.google.zxing:core`（二维码）
 - `HttpServer.java` 内置 HTTP 服务：上传（`POST /api/upload`）、排序、文件下发（支持 Range 请求）
 - 上传的文件名以上传时间开头，天然按时间排序；网页端与电视端通过同一接口同步顺序
+
+## 相关文章
+
+- [不 Root、不装 Termux，我把完整的 Ubuntu 塞进了安卓手机，还跑通了 Claude Code！](https://mp.weixin.qq.com/s/MTuWGOvqBgyvFsBGllt5nw)（作者：字节笔记本）
